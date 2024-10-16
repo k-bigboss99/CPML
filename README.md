@@ -99,14 +99,7 @@
 ## Citation
 If you use the FaceForensics++ data or code please cite:
 ```
-  @InProceedings{Srivatsan_2023_ICCV,
-    author    = {Ching-Yi Lai, Chiou-Ting Hsu, Chia-Wen Lin and Chih-Chung Hsu},
-    title     = {Prompt-guided Multi-modal contrastive learning for Cross-compression-rate Deepfake Detection},
-    booktitle = {},
-    month     = {November},
-    year      = {2024},
-    pages     = {}
-}
+
 ```
 
 ## Acknowledgement
