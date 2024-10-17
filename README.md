@@ -6,11 +6,10 @@
     - ![image](https://github.com/user-attachments/assets/024aaabb-212f-4119-9043-f23d539b51a9)
   
 - Cross-Quality Similarity Learning(CQSL)
-![image](https://hackmd.io/_uploads/r19_XIMCR.png)
+    - ![image](https://github.com/user-attachments/assets/03b5633c-9430-4f07-84de-28e9af01dea8)
 
 - Cross-Modality Consistency Learning(CMCL)
-![image](https://hackmd.io/_uploads/Hy2KXLGAR.png)
-
+    - ![image](https://github.com/user-attachments/assets/6af96756-9f53-4a3f-9481-eb6716203297)
 
 
 ## Highlights
@@ -85,7 +84,7 @@
 - Cross-manipulation Evaluation
 ![image](https://hackmd.io/_uploads/Byk5W8GR0.png)
 
--  Cross-compression-rate Evaluation
+- Cross-compression-rate Evaluation
 ![image](https://hackmd.io/_uploads/HJ29bUf0C.png)
 ![image](https://hackmd.io/_uploads/SkspbUMAR.png)
 
