@@ -3,13 +3,14 @@
 ## Overview
 
 - Framework
-    - ![image](https://github.com/user-attachments/assets/024aaabb-212f-4119-9043-f23d539b51a9)
-  
+    - ![image](https://github.com/user-attachments/assets/96a96bfd-dc3f-4bd8-b7f9-410cbd685ae2)
+
 - Cross-Quality Similarity Learning(CQSL)
-    - ![image](https://github.com/user-attachments/assets/03b5633c-9430-4f07-84de-28e9af01dea8)
+    - ![image](https://github.com/user-attachments/assets/a67dde90-e458-45f3-acc0-294b5bee1244)
+
 
 - Cross-Modality Consistency Learning(CMCL)
-    - ![image](https://github.com/user-attachments/assets/6af96756-9f53-4a3f-9481-eb6716203297)
+    - ![image](https://github.com/user-attachments/assets/1bb426ee-612c-4d86-abe6-8b1bee8cdbb7)
 
 
 ## Highlights
@@ -27,7 +28,7 @@
 
 - Dataset Pre-Processing
     - Benchmark Datasets: FF++, Celeb-DF, DFD
-    - For benchmark dataset, follow the preprocessing step of SSDG to detect and align the faces using [MTCNN](https://github.com/YYuanAnyVision/mxnet_mtcnn_face_detection).
+    - For the benchmark dataset, follow the preprocessing step of SSDG to detect and align the faces using [MTCNN](https://github.com/YYuanAnyVision/mxnet_mtcnn_face_detection).
     - For each video, we sample 160 frames (30fps) to ensure an adequate amount of rPPG signals for analysis.
     - Input the sample frames into MTCNN to detect, align and crop the images. Save the frames into Deepfake_dataset/FF++/ with the following directory structure:
     ```
@@ -79,21 +80,16 @@
 ## Results
 
 - In- and Cross-dataset Evaluations
-![image](https://hackmd.io/_uploads/B1inW8zRR.png)
+    - ![image](https://github.com/user-attachments/assets/a871d03e-dced-44bd-b11f-3a96399abf68)
 
 - Cross-manipulation Evaluation
-![image](https://hackmd.io/_uploads/Byk5W8GR0.png)
+    - ![image](https://github.com/user-attachments/assets/9ae29359-5533-4918-a33c-913348717952)
 
-- Cross-compression-rate Evaluation
-![image](https://hackmd.io/_uploads/HJ29bUf0C.png)
-![image](https://hackmd.io/_uploads/SkspbUMAR.png)
+-  Cross-compression-rate Evaluation
+    - ![image](https://github.com/user-attachments/assets/65030c89-9946-4203-9c0e-fe7e76328c1a)
 
 - Ablation study
-![image](https://hackmd.io/_uploads/rJ_AZIzRC.png)
-
-
-
-## Visualizations
+    - ![image](https://github.com/user-attachments/assets/9bcf45ce-6b81-4558-93ea-93e3d8380159)
 
 ## Citation
 If you use the FaceForensics++ data or code please cite:
