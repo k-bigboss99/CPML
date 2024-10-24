@@ -92,7 +92,7 @@
     - ![image](https://github.com/user-attachments/assets/9bcf45ce-6b81-4558-93ea-93e3d8380159)
 
 ## Citation
-If you use the FaceForensics++ data or code please cite:
+If you use the CPML data or code please cite:
 ```
 
 ```
