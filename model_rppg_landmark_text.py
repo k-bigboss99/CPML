@@ -1,4 +1,4 @@
-from prompt_rppg import spoof_templates, real_templates
+from prompt_rppg import fake_templates, real_templates
 class CrossAttentionLayer(nn.Module):
     def __init__(self, input_dim1, input_dim2, hidden_dim):
         super(CrossAttentionLayer, self).__init__()
@@ -141,7 +141,7 @@ class PAD_Classifier(nn.Module):
         rppg_x ,score1_x,score2_x,score3_x,feature_1,feature_2 = self.downstream(video,gra_sharp,size) #　rppg_x ,score1_x,score2_x,score3_x
         
         # text  tokenize 
-        texts = clip.tokenize(spoof_templates[random.randint(0, 5)]).cuda(non_blocking=True) #tokenize
+        texts = clip.tokenize(fake_templates[random.randint(0, 5)]).cuda(non_blocking=True) #tokenize
         class_embeddings = self.text_encode.encode_text(texts) 
         
     

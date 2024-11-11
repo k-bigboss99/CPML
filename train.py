@@ -41,7 +41,7 @@ from landmark_model import DualLRNet
 from rppg_model import ViT_ST_ST_Compact3_TDC_gra_sharp
 from model_rppg_landmark_text import PAD_Classifier
 
-def HR_60_to_120(HR_rate):
+def HR_F0_to_120(HR_rate):
     if HR_rate<60:
         HR_rate = 60
     elif HR_rate>=120:
@@ -63,8 +63,6 @@ def butter_bandpass(sig, lowcut, highcut, fs, order=2):
     return y
 
 def hr_fft(sig, fs, harmonics_removal=True):
-    # get heart rate by FFT
-    # return both heart rate and PSD
 
     sig = sig.reshape(-1)
     sig = sig * signal.windows.hann(sig.shape[0])
@@ -72,7 +70,6 @@ def hr_fft(sig, fs, harmonics_removal=True):
     low_idx = np.round(0.6 / fs * sig.shape[0]).astype('int')
     high_idx = np.round(4 / fs * sig.shape[0]).astype('int')
     sig_f_original = sig_f.copy()
-    # sig_f_original = sig_f.detach()
     
     sig_f[:low_idx] = 0
     sig_f[high_idx:] = 0
@@ -103,8 +100,7 @@ def hr_fft(sig, fs, harmonics_removal=True):
 def normalize(x):
     return (x-x.mean())/x.std()
 
-
-def load_net(args, device, rPPG_path=None, LRNet_comp=None, model_text=None):
+def load_net(device, rPPG_path=None, LRNet_comp=None, model_text=None):
     
     if LRNet_comp is None or LRNet_comp == "":
         LRNet_load = False
@@ -128,12 +124,6 @@ def load_net(args, device, rPPG_path=None, LRNet_comp=None, model_text=None):
         # 3. load the new state dict
         model.load_state_dict(model_dict) # model_dict or pretrained_dict
         
-        if args.fix_weight:
-            print("Fix the weights of the rPPG estimation model")
-            model.requires_grad_(False)
-
-        else:
-            print("Finetune all weights")
         
         return model
 
@@ -152,44 +142,39 @@ def load_net(args, device, rPPG_path=None, LRNet_comp=None, model_text=None):
     else:
         print("No pretrained rPPG model is loaded")
 
-    net = PAD_Classifier(net_pad,net_downstream,model_text)# numClasses = 2, net_adapter
+    net = PAD_Classifier(net_pad,net_downstream,model_text)
     net.to(device)
     
     return net
 
-class Pearson(nn.Module):    # Pearson range [-1, 1] so if < 0, abs|loss| ; if >0, 1- loss
+class Pearson(nn.Module):    
     def __init__(self):
         super(Pearson,self).__init__()
         return
-    def forward(self, preds, labels):       # all variable operation
+    def forward(self, preds, labels):    
         loss = 0
-        # print(f"{preds.shape[1] = }") # 160 frames
-        # print(f"{preds.shape[0] = }") # batch size 
         for i in range(preds.shape[0]):
-            sum_x = torch.sum(preds[i])                # x
-            sum_y = torch.sum(labels[i])               # y
-            sum_xy = torch.sum(preds[i]*labels[i])        # xy
-            sum_x2 = torch.sum(torch.pow(preds[i],2))  # x^2
-            sum_y2 = torch.sum(torch.pow(labels[i],2)) # y^2
+            sum_x = torch.sum(preds[i])               
+            sum_y = torch.sum(labels[i])              
+            sum_xy = torch.sum(preds[i]*labels[i])       
+            sum_x2 = torch.sum(torch.pow(preds[i],2)) 
+            sum_y2 = torch.sum(torch.pow(labels[i],2)) 
             N = preds.shape[1]
             
             pearson = (N*sum_xy - sum_x*sum_y)/(torch.sqrt((N*sum_x2 - torch.pow(sum_x,2))*(N*sum_y2 - torch.pow(sum_y,2))))
             loss +=  pearson
             
         loss = loss/preds.shape[0]
-        # print(preds, labels)
         return loss
 
 torch.autograd.set_detect_anomaly(True)
 
-
 # loader
-seq_len = args.seq_len
 
-train_loader_raw_real = get_loader(train=True, seq_length=seq_len, batch_size=args.bs, if_fg=True, shuffle=False,
-                         real_or_fake="real", real="youtube", fake=args.subset, comp=args.comp_3_loader)
-train_loader_raw_fake = get_loader(train=True, seq_length=seq_len, batch_size=args.bs, if_fg=True, shuffle=False,
-                         real_or_fake="fake", real="youtube", fake=args.subset, comp=args.comp_3_loader)
+train_loader_raw_real = get_loader(train=True, seq_length=160, batch_size=1, if_fg=True, shuffle=False,
+                         real_or_fake="real", real="youtube", fake=DF, comp=raw)
+train_loader_raw_fake = get_loader(train=True, seq_length=160, batch_size=1, if_fg=True, shuffle=False,
+                         real_or_fake="fake", real="youtube", fake=DF, comp=raw)
 
 
 
@@ -197,28 +182,21 @@ train_loader_raw_fake = get_loader(train=True, seq_length=seq_len, batch_size=ar
 model_text, _ = clip.load("ViT-B/16", 'cuda:0')
 
 # model
-model = load_net(args, device=device, rPPG_path="Physformer_VIPL_fold1.pkl", LRNet_comp=args.comp_3_loader, model_text=model_text)
+model = load_net(device=device, rPPG_path="Physformer_VIPL_fold1.pkl", LRNet_comp=raw, model_text=model_text)
 
 # optim and  BCE_loss 
-opt_fg = optim.AdamW(model.parameters(), lr=args.lr)
+opt_fg = optim.AdamW(model.parameters(), lr=0.00001)
 BCE_loss = nn.CrossEntropyLoss()  
 
-
-# loss 
 similar = torch.tensor([1], dtype=torch.float).to(device)
 dissimilar = torch.tensor([-1], dtype=torch.float).to(device)
 
 
 for epoch in range(epoch_number,epoch_number+1):
-    print(f"epoch_train: {epoch_number} / {epoch_number+1}:")
     for step, (data_raw_r,data_raw_f) in enumerate(zip(_train_loader_raw_real, _train_loader_raw_fake)):
 
-        face_frames_r, landmarks_r, landmarks_diff_r, label_r, subjects_r = data_raw_r 
-        face_frames_f, landmarks_f, landmarks_diff_f, label_f, subjects_f = data_raw_f 
-        if face_frames_r.shape[0] != args.bs or face_frames_f.shape[0] != args.bs:
-            print(f"{face_frames_R.shape[0]=}, continue")
-            print(f"{face_frames_F.shape[0]=}, continue")
-            continue
+        face_frames_r, landmarks_r, landmarks_diff_r, label_r, subjects_r = data_raw_r
+        face_frames_f, landmarks_f, landmarks_diff_f, label_f, subjects_f = data_raw_f
 
         # load raw video
         face_frames_r = face_frames_r.to(device)
@@ -230,17 +208,20 @@ for epoch in range(epoch_number,epoch_number+1):
         label_r = label_r.to(device) 
         label_f = label_f.to(device)
         
-        # torch.cuda.reset_peak_memory_stats()    
-        
-        # TODO model input raw video feature ,rppg ,landmark feature
-        # Classifier_output= model(INPUT)
-        out, out_land, out_rPPG, rppg, cosine_similarity_feature_text, cosine_similarity_feature_text_other \
-        ,out_rppg_cross_landmark_cat_prompt   = model(face_frames, landmarks, landmarks_diff, similar,size=128)
+        # model input raw video feature ,rppg ,landmark feature
+        # out, out_land, out_rPPG, rppg, cosine_similarity_feature_text, cosine_similarity_feature_text_other \
+        # ,out_rppg_cross_landmark_cat_prompt = model(face_frames, landmarks, landmarks_diff, similar,size=128)
    
-        # paper loss(4) BCE loss
-        loss_BCE = BCE_loss(out_rppg_cross_landmark_cat_prompt ,label[:, 0].long())
+
+        # raw_real 
+        out_R, out_land_R, out_rPPG_R, rppg_R, cosine_similarity_feature_text_R, cosine_similarity_feature_text_other_R \
+        ,out_rppg_cross_landmark_cat_prompt_R   = model(face_frames_R, landmarks_R, landmarks_diff_R, similar,size=128)
+       
+        # raw_fake
+        out_F, out_land_F, out_rPPG_F, rppg_F, cosine_similarity_feature_text_F, cosine_similarity_feature_text_other_F \
+        ,out_rppg_cross_landmark_cat_prompt_F    = model(face_frames_F, landmarks_F, landmarks_diff_F, dissimilar,size=128)
         
-        # backward
+        loss_BCE = BCE_loss(out_rppg_cross_landmark_cat_prompt ,label[:, 0].long())
         total_loss.backward()
         
 
@@ -254,34 +235,39 @@ for epoch in range(epoch_number,epoch_number+1):
         """
         text embedding from FLIP method
         """
-        # # self.text_encode = model_text
-        # class_embeddings = self.text_encode.encode_text(texts) 
-        # class_embeddings = class_embeddings.mean(dim=0) 
-        # # normalized features
-        # class_embeddings = class_embeddings / class_embeddings.norm(dim=-1, keepdim=True)
-        # cosine_similarity_feature_text = self.cosine_similarity(rppg_cat_landmark,class_embeddings)
+        # self.text_encode = model_text
+        class_embeddings = self.text_encode.encode_text(texts) 
+        class_embeddings = class_embeddings.mean(dim=0)
 
-        # loss_cosine_similarity = 1 - cosine_similarity_feature_text
-        # # loss_cosine_similarity_other = cosine_similarity_feature_text_other
+        # normalized features
+        class_embeddings = class_embeddings / class_embeddings.norm(dim=-1, keepdim=True)
+        cosine_similarity_feature_text = self.cosine_similarity(rppg_cat_landmark,class_embeddings)
+
+        loss_similar = 1 - cosine_similarity_feature_text
+        loss_dissimilar = cosine_similarity_feature_text_other
+
+        loss_cosine_similarity_5 = 1 - cosine_similarity_feature_text_5
+        loss_cosine_similarity_6 = 1 - cosine_similarity_feature_text_6
+        loss_cosine_similarity_other_5 = cosine_similarity_feature_text_other_5
+        loss_cosine_similarity_other_6 = cosine_similarity_feature_text_other_6
         
         # paper loss(12),loss(13)
-        total_cosine_similarity_loss = loss_cosine_similarity + loss_cosine_similarity_other
-        total_cosine_similarity_other_loss = loss_cosine_similarity + loss_cosine_similarity_other
+        loss_text_pull = loss_similar + loss_dissimilar
+        loss_text_push = loss_similar + loss_dissimilar
 
 
-        # paper loss(5),loss(7)
         PearsoLoss = Pearson()
         loss_rppg_between_RF = abs(PearsoLoss(rppg_R, rppg_F)) 
         loss_rppg_between_Rr = 1 - PearsoLoss(rppg_R, rppg_r)
         loss_rppg_between_rf = abs(PearsoLoss(rppg_r, rppg_f)) 
         loss_rppg_between_Ff = 1 - PearsoLoss(rppg_F, rppg_f)
         loss_rppg_between_Rf = abs(PearsoLoss(rppg_R, rppg_f))
-        loss_rppg_between_rF = abs(PearsoLoss(rppg_r, rppg_F)) 
-        rPPG_pull_loss = loss_rppg_between_Rr + loss_rppg_between_Ff
-        rPPG_push_loss = loss_rppg_between_RF + loss_rppg_between_rf + loss_rppg_between_Rf + loss_rppg_between_rF
+        loss_rppg_between_rF = abs(PearsoLoss(rppg_r, rppg_F))
+
+        loss_rPPG_pull = loss_rppg_between_Rr + loss_rppg_between_Ff
+        loss_rPPG_push = loss_rppg_between_RF + loss_rppg_between_rf + loss_rppg_between_Rf + loss_rppg_between_rF
         
-        # paper loss(9) HR
-        # HR 
+
         rppg_R_butter = butter_bandpass(rppg_R.detach().cpu().numpy(), lowcut=0.6, highcut=4, fs=30)
         rppg_F_butter = butter_bandpass(rppg_F.detach().cpu().numpy(), lowcut=0.6, highcut=4, fs=30)
         rppg_r_butter = butter_bandpass(rppg_r.detach().cpu().numpy(), lowcut=0.6, highcut=4, fs=30)
@@ -292,37 +278,28 @@ for epoch in range(epoch_number,epoch_number+1):
         hr_r, psd_y_r, psd_x_r = hr_fft(rppg_r_butter, fs=30)
         hr_f, psd_y_f, psd_x_f = hr_fft(rppg_f_butter, fs=30)
 
-        hr_R = HR_60_to_120(hr_R)
-        hr_F = HR_60_to_120(hr_F)
-        hr_r = HR_60_to_120(hr_r)
-        hr_f = HR_60_to_120(hr_f)
-        # print(hr_1,hr_2,hr_3,hr_4)
+        hr_R = HR_F0_to_120(hr_R)
+        hr_F = HR_F0_to_120(hr_F)
+        hr_r = HR_F0_to_120(hr_r)
+        hr_f = HR_F0_to_120(hr_f)
 
-        # HR_diff_1 = abs(hr_1-hr_2)/60 # c23 real - c23 fake dissimilar (120-60)
-        HR_diff_2 = abs(hr_1-hr_3)/60 # c23 real - c40 real similar
-        # HR_diff_3 = abs(hr_3-hr_4)/60 # c40 real - c40 fake dissimilar
-        HR_diff_4 = abs(hr_2-hr_4)/60 # c23 fake - c40 fake similar
-        # HR_diff_5 = abs(hr_1-hr_4)/60 # c23 real - c40 fake dissimilar
-        # HR_diff_6 = abs(hr_3-hr_2)/60 # c40 real - c23 fake dissimilar
-        # print(HR_diff_1,HR_diff_2,HR_diff_3,HR_diff_4,HR_diff_5,HR_diff_6)    
-        HR_diff_pos = ( HR_diff_2 + HR_diff_4) / 2
-        # HR_diff_neg = ((1-HR_diff_1) + (1-HR_diff_3) + (1-HR_diff_5) + (1-HR_diff_6)) / 4
+        loss_norm_Rr = abs(hr_1-hr_3)/60
+        loss_norm_Ff = abs(hr_2-hr_4)/60 
 
-        # paper loss(10)
-        physiological_loss = rPPG_pull_loss + rPPG_push_loss +  HR_diff_pos
+        loss_hr = ( loss_norm_Rr + loss_norm_Ff) / 2
+
+        physiological_loss = loss_rPPG_pull + loss_rPPG_push +  loss_hr
         
-        # paper loss(11)
+
         MSELoss = nn.MSELoss()
         loss_mse_between_Rr = MSELoss(cosine_similarity_feature_text_R, cosine_similarity_feature_text_r) 
         loss_mse_between_Ff = MSELoss(cosine_similarity_feature_text_F, cosine_similarity_feature_text_f) 
-        total_mse_loss = loss_mse_between_Rr + loss_mse_between_Ff
+        loss_mse = loss_mse_between_Rr + loss_mse_between_Ff
 
-        # paper loss(14)
-        crossmodal_consistency_loss = total_cosine_similarity_loss + total_cosine_similarity_other_loss + total_mse_loss
+        cross_modal_consistency_loss = loss_text_pull + loss_text_push + loss_mse
 
-        # paper loss(15)
-        total_loss = 0.2*physiological_loss + 0.25*crossmodal_consistency_loss
-
+        
+        total_loss = 0.2*physiological_loss + 0.25*cross_modal_consistency_loss
 
         total_loss.backward()
         opt_fg.step()

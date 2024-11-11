@@ -160,17 +160,17 @@ class ViT_ST_ST_Compact3_TDC_gra_sharp(nn.Module):
 
 
     def forward(self, x, gra_sharp,size):
-        # downsample
-        if size == 32: # to be 32
+        # downsample raw view1 view2
+        if size == 32: 
             x = self.ConvBlock1(x)  # [B, 16, T, H, W] -> [B, 3, T, H, W] 
             x = self.MaxpoolSpa(x)  # [B, 16, T, H/2, W/2] -> [B, 3, T, H/2, W/2]
             x = self.ConvBlock1(x)  # [B, 16, T, H, W] -> [B, 3, T, H, W] 
             x = self.MaxpoolSpa(x)  # [B, 16, T, H/2, W/2] -> [B, 3, T, H/2, W/2]
-        elif size == 64: # to be 64
+        elif size == 64:
             x = self.ConvBlock1(x)  # [B, 16, T, H, W] -> [B, 3, T, H, W] 
             x = self.MaxpoolSpa(x)  # [B, 16, T, H/2, W/2] -> [B, 3, T, H/2, W/2]
         else:
-            pass # raw 128
+            pass 
 
         b, c, t, fh, fw = x.shape
         
@@ -199,8 +199,6 @@ class ViT_ST_ST_Compact3_TDC_gra_sharp(nn.Module):
         features_last = torch.mean(features_last,3)     # x [B, 32, 160, 4]  
         features_last = torch.mean(features_last,3)     # x [B, 32, 160]    
         rPPG = self.ConvBlockLast(features_last)    # x [B, 1, 160]
-        
-        #pdb.set_trace()
         
         rPPG = rPPG.squeeze(1)
         
