@@ -221,7 +221,8 @@ for epoch in range(epoch_number,epoch_number+1):
         out_F, out_land_F, out_rPPG_F, rppg_F, cosine_similarity_feature_text_F, cosine_similarity_feature_text_other_F \
         ,out_rppg_cross_landmark_cat_prompt_F    = model(face_frames_F, landmarks_F, landmarks_diff_F, dissimilar,size=128)
         
-        loss_BCE = BCE_loss(out_rppg_cross_landmark_cat_prompt ,label[:, 0].long())
+        loss_BCE = BCE_loss(out_rppg_cross_landmark_cat_prompt_R ,label_r[:, 0].long())
+        loss_BCE = BCE_loss(out_rppg_cross_landmark_cat_prompt_F ,label_f[:, 0].long())
         total_loss.backward()
         
 
@@ -232,30 +233,40 @@ for epoch in range(epoch_number,epoch_number+1):
         # paper loss(sim),loss(dis)
         # nn.CosineSimilarity(rppg_cat_landmark,text_embedding_real/fake_prompt) 
 
-        """
-        text embedding from FLIP method
-        """
-        # self.text_encode = model_text
-        class_embeddings = self.text_encode.encode_text(texts) 
-        class_embeddings = class_embeddings.mean(dim=0)
+        # size = 64 (view1), 32(view2)
+        # view1_real 
+        out_R, out_land_R, out_rPPG_R, rppg_R, cosine_similarity_feature_text_R, cosine_similarity_feature_text_other_R \
+        ,out_rppg_cross_landmark_cat_prompt_R   = model(face_frames_R, landmarks_R, landmarks_diff_R, similar,size=64)
+       
+        # view1_fake
+        out_F, out_land_F, out_rPPG_F, rppg_F, cosine_similarity_feature_text_F, cosine_similarity_feature_text_other_F \
+        ,out_rppg_cross_landmark_cat_prompt_F    = model(face_frames_F, landmarks_F, landmarks_diff_F, dissimilar,size=64)
+        # view2_real 
+        out_r, out_land_r, out_rPPG_r, rppg_r, cosine_similarity_feature_text_r, cosine_similarity_feature_text_other_r \
+        ,out_rppg_cross_landmark_cat_prompt_r   = model(face_frames_R, landmarks_R, landmarks_diff_R, similar,size=32)
+       
+        # view2_fake
+        out_f, out_land_f, out_rPPG_f, rppg_f, cosine_similarity_feature_text_f, cosine_similarity_feature_text_other_f \
+        ,out_rppg_cross_landmark_cat_prompt_f    = model(face_frames_F, landmarks_F, landmarks_diff_F, dissimilar,size=32)
 
-        # normalized features
-        class_embeddings = class_embeddings / class_embeddings.norm(dim=-1, keepdim=True)
-        cosine_similarity_feature_text = self.cosine_similarity(rppg_cat_landmark,class_embeddings)
-
-        loss_similar = 1 - cosine_similarity_feature_text
-        loss_dissimilar = cosine_similarity_feature_text_other
-
-        loss_cosine_similarity_5 = 1 - cosine_similarity_feature_text_5
-        loss_cosine_similarity_6 = 1 - cosine_similarity_feature_text_6
-        loss_cosine_similarity_other_5 = cosine_similarity_feature_text_other_5
-        loss_cosine_similarity_other_6 = cosine_similarity_feature_text_other_6
-        
+        # loss_BCE = BCE_loss(out_rppg_cross_landmark_cat_prompt_R ,label_r[:, 0].long())
+        # loss_BCE = BCE_loss(out_rppg_cross_landmark_cat_prompt_F ,label_f[:, 0].long())
+       
         # paper loss(12),loss(13)
-        loss_text_pull = loss_similar + loss_dissimilar
-        loss_text_push = loss_similar + loss_dissimilar
+        loss_cosine_similarity_R = 1 - cosine_similarity_feature_text_R
+        loss_cosine_similarity_F = 1 - cosine_similarity_feature_text_F
+        loss_cosine_similarity_r = 1 - cosine_similarity_feature_text_r
+        loss_cosine_similarity_f = 1 - cosine_similarity_feature_text_f
 
+        loss_cosine_similarity_other_R = cosine_similarity_feature_text_other_R
+        loss_cosine_similarity_other_F = cosine_similarity_feature_text_other_F
+        loss_cosine_similarity_other_r = cosine_similarity_feature_text_other_r
+        loss_cosine_similarity_other_f = cosine_similarity_feature_text_other_f
 
+        loss_text_pull = loss_cosine_similarity_R + loss_cosine_similarity_F+ loss_cosine_similarity_r + loss_cosine_similarity_f
+        loss_text_push = loss_cosine_similarity_other_R + loss_cosine_similarity_other_F + loss_cosine_similarity_other_r +loss_cosine_similarity_other_f
+
+        # rPPG contrast learning loss
         PearsoLoss = Pearson()
         loss_rppg_between_RF = abs(PearsoLoss(rppg_R, rppg_F)) 
         loss_rppg_between_Rr = 1 - PearsoLoss(rppg_R, rppg_r)
@@ -294,6 +305,7 @@ for epoch in range(epoch_number,epoch_number+1):
         MSELoss = nn.MSELoss()
         loss_mse_between_Rr = MSELoss(cosine_similarity_feature_text_R, cosine_similarity_feature_text_r) 
         loss_mse_between_Ff = MSELoss(cosine_similarity_feature_text_F, cosine_similarity_feature_text_f) 
+        
         loss_mse = loss_mse_between_Rr + loss_mse_between_Ff
 
         cross_modal_consistency_loss = loss_text_pull + loss_text_push + loss_mse
