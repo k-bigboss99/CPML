@@ -41,6 +41,7 @@ class PAD_Classifier(nn.Module):
         self.classifier_land = nn.Linear(64+64, 2)
         self.classifier_rPPG = nn.Linear(160, 2)
         self.text_encode = model_text
+    
     def forward(self, video, landmark, landmark_diff,sim_or_dis,size):
         def extract_and_displace_all_points(tensor,shift_x,shift_y):
             displaced_tensor = tensor.clone() 
@@ -83,7 +84,7 @@ class PAD_Classifier(nn.Module):
                     landmark[0, i, j] = x
                     landmark[0, i, j + 1] = y
             landmark_diff = landmark_diff
-        elif size ==64:
+        elif size == 64:
             landmark = extract_and_displace_all_points(landmark,-0.0005,0.0005)
             # lip 48 - 67
             for i in range(landmark.size(1)):  
@@ -124,16 +125,31 @@ class PAD_Classifier(nn.Module):
         gra_sharp = 2.0
         rppg_x ,score1_x,score2_x,score3_x,feature_1,feature_2 = self.downstream(video,gra_sharp,size) #　rppg_x ,score1_x,score2_x,score3_x
         
-        # text  tokenize 
-        texts = clip.tokenize(fake_templates[random.randint(0, 5)]).cuda(non_blocking=True) #tokenize
+        # text tokenize 
+        if sim_or_dis == 1:
+            texts = clip.tokenize(real_templates[random.randint(0, 5)]).cuda(non_blocking=True) # tokenize
+            other_texts = clip.tokenize(spoof_templates[random.randint(0, 5)]).cuda(non_blocking=True)
+        elif sim_or_dis == -1:
+            texts = clip.tokenize(spoof_templates[random.randint(0, 5)]).cuda(non_blocking=True) #tokenize
+            other_texts = clip.tokenize(real_templates[random.randint(0, 5)]).cuda(non_blocking=True)
+        else:
+            print("Waring:self.sim_or_dis")
+
+        # embed with text encoder
         class_embeddings = self.text_encode.encode_text(texts) 
+        class_embeddings = class_embeddings.mean(dim=0) 
+        class_embeddings_other = self.text_encode.encode_text(other_texts) 
+        class_embeddings_other = class_embeddings_other.mean(dim=0) 
+
+        # normalized features
+        class_embeddings = class_embeddings / class_embeddings.norm(dim=-1, keepdim=True)
+        class_embeddings_other = class_embeddings_other / class_embeddings_other.norm(dim=-1, keepdim=True)
         
-    
+        
         # stack rppg feature
         downstream_features_detach = torch.cat([feature_1, feature_2],dim=1)
         downstream_features_detach = downstream_features_detach.view(1,-1)
         downstream_features_detach = self.classifier_rPPG_attention_stack(downstream_features_detach)
-
 
         feature_landmark = torch.cat([PAE_feature, PAE_feature_diff],dim=1)
         rppg_x_view = torch.cat([rppg_x, downstream_features_detach],dim=1)
@@ -145,9 +161,9 @@ class PAD_Classifier(nn.Module):
 
 
         unified_feature_f_512 = self.classifier_unified_feature_to_512(unified_feature_f)
-        loss_cos_feature_text = self.cosine_similarity(unified_feature_f_512,class_embeddings) 
-        loss_cos_feature_text_other = self.cosine_similarity(unified_feature_f_512,class_embeddings_other) 
-        feature_rppg_cross_landmark_cat_prompt = torch.cat([unified_feature_f_512,class_embeddings.view(1, -1)],dim=1)
+        loss_cos_feature_text = self.cosine_similarity(unified_feature_f_512, class_embeddings) 
+        loss_cos_feature_text_other = self.cosine_similarity(unified_feature_f_512, class_embeddings_other) 
+        feature_rppg_cross_landmark_cat_prompt = torch.cat([unified_feature_f_512, class_embeddings.view(1, -1)],dim=1)
         
         out_rppg_cross_landmark_cat_prompt = self.classifier_rppg_cross_landmark_cat_prompt(feature_rppg_cross_landmark_cat_prompt) 
         out_rppg_landmark = self.classifier_layer_attention(unified_feature_f)
