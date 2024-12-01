@@ -194,11 +194,11 @@ dissimilar = torch.tensor([-1], dtype=torch.float).to(device)
 
 for epoch in range(epoch_number,epoch_number+1):
     for step, (data_raw_r,data_raw_f) in enumerate(zip(_train_loader_raw_real, _train_loader_raw_fake)):
-
+        
+        # Multi-modal Prompt-guided Learning
         face_frames_r, landmarks_r, landmarks_diff_r, label_r, subjects_r = data_raw_r
         face_frames_f, landmarks_f, landmarks_diff_f, label_f, subjects_f = data_raw_f
 
-        # load raw video
         face_frames_r = face_frames_r.to(device)
         face_frames_f = face_frames_f.to(device)
         landmarks_r = landmarks_r.to(device)
@@ -207,66 +207,32 @@ for epoch in range(epoch_number,epoch_number+1):
         landmarks_diff_f = landmarks_diff_f.to(device)
         label_r = label_r.to(device) 
         label_f = label_f.to(device)
-        
-        # model input raw video feature ,rppg ,landmark feature
-        # out, out_land, out_rPPG, rppg, cosine_similarity_feature_text, cosine_similarity_feature_text_other \
-        # ,out_rppg_cross_landmark_cat_prompt = model(face_frames, landmarks, landmarks_diff, similar,size=128)
-   
+    
 
-        # raw_real 
-        out_R, out_land_R, out_rPPG_R, rppg_R, cosine_similarity_feature_text_R, cosine_similarity_feature_text_other_R \
-        ,out_rppg_cross_landmark_cat_prompt_R   = model(face_frames_R, landmarks_R, landmarks_diff_R, similar,size=128)
+        out_Real, out_land_Real, out_rPPG_Real, rppg_Real, cosine_similarity_feature_text_Real, cosine_similarity_feature_text_other_Real \
+        ,out_rppg_cross_landmark_cat_prompt_Real = model(face_frames_Real, landmarks_Real, landmarks_diff_Real, similar,size=128)
        
-        # raw_fake
-        out_F, out_land_F, out_rPPG_F, rppg_F, cosine_similarity_feature_text_F, cosine_similarity_feature_text_other_F \
-        ,out_rppg_cross_landmark_cat_prompt_F    = model(face_frames_F, landmarks_F, landmarks_diff_F, dissimilar,size=128)
+        out_Fake, out_land_Fake, out_rPPG_Fake, rppg_Fake, cosine_similarity_feature_text_Fake, cosine_similarity_feature_text_other_Fake \
+        ,out_rppg_cross_landmark_cat_prompt_Fake = model(face_frames_Fake, landmarks_Fake, landmarks_diff_Fake, dissimilar,size=128)
         
         loss_BCE = BCE_loss(out_rppg_cross_landmark_cat_prompt_R ,label_r[:, 0].long())
         loss_BCE = BCE_loss(out_rppg_cross_landmark_cat_prompt_F ,label_f[:, 0].long())
         total_loss.backward()
         
-
         # Multi-modal Prompt-guided Contrastive Learning
-        # downsample views 
-        # OUTPUT= model(INPUT)
- 
-        # paper loss(sim),loss(dis)
-        # nn.CosineSimilarity(rppg_cat_landmark,text_embedding_real/fake_prompt) 
-
-        # size = 64 (view1), 32(view2)
-        # view1_real 
         out_R, out_land_R, out_rPPG_R, rppg_R, cosine_similarity_feature_text_R, cosine_similarity_feature_text_other_R \
         ,out_rppg_cross_landmark_cat_prompt_R   = model(face_frames_R, landmarks_R, landmarks_diff_R, similar,size=64)
        
-        # view1_fake
         out_F, out_land_F, out_rPPG_F, rppg_F, cosine_similarity_feature_text_F, cosine_similarity_feature_text_other_F \
         ,out_rppg_cross_landmark_cat_prompt_F    = model(face_frames_F, landmarks_F, landmarks_diff_F, dissimilar,size=64)
-        # view2_real 
+
         out_r, out_land_r, out_rPPG_r, rppg_r, cosine_similarity_feature_text_r, cosine_similarity_feature_text_other_r \
         ,out_rppg_cross_landmark_cat_prompt_r   = model(face_frames_R, landmarks_R, landmarks_diff_R, similar,size=32)
        
-        # view2_fake
         out_f, out_land_f, out_rPPG_f, rppg_f, cosine_similarity_feature_text_f, cosine_similarity_feature_text_other_f \
         ,out_rppg_cross_landmark_cat_prompt_f    = model(face_frames_F, landmarks_F, landmarks_diff_F, dissimilar,size=32)
 
-        # loss_BCE = BCE_loss(out_rppg_cross_landmark_cat_prompt_R ,label_r[:, 0].long())
-        # loss_BCE = BCE_loss(out_rppg_cross_landmark_cat_prompt_F ,label_f[:, 0].long())
-       
-        # paper loss(12),loss(13)
-        loss_cosine_similarity_R = 1 - cosine_similarity_feature_text_R
-        loss_cosine_similarity_F = 1 - cosine_similarity_feature_text_F
-        loss_cosine_similarity_r = 1 - cosine_similarity_feature_text_r
-        loss_cosine_similarity_f = 1 - cosine_similarity_feature_text_f
-
-        loss_cosine_similarity_other_R = cosine_similarity_feature_text_other_R
-        loss_cosine_similarity_other_F = cosine_similarity_feature_text_other_F
-        loss_cosine_similarity_other_r = cosine_similarity_feature_text_other_r
-        loss_cosine_similarity_other_f = cosine_similarity_feature_text_other_f
-
-        loss_text_pull = loss_cosine_similarity_R + loss_cosine_similarity_F+ loss_cosine_similarity_r + loss_cosine_similarity_f
-        loss_text_push = loss_cosine_similarity_other_R + loss_cosine_similarity_other_F + loss_cosine_similarity_other_r +loss_cosine_similarity_other_f
-
-        # rPPG contrast learning loss
+        # Cross-Quality Similarity Learning
         PearsoLoss = Pearson()
         loss_rppg_between_RF = abs(PearsoLoss(rppg_R, rppg_F)) 
         loss_rppg_between_Rr = 1 - PearsoLoss(rppg_R, rppg_r)
@@ -278,7 +244,6 @@ for epoch in range(epoch_number,epoch_number+1):
         loss_rPPG_pull = loss_rppg_between_Rr + loss_rppg_between_Ff
         loss_rPPG_push = loss_rppg_between_RF + loss_rppg_between_rf + loss_rppg_between_Rf + loss_rppg_between_rF
         
-
         rppg_R_butter = butter_bandpass(rppg_R.detach().cpu().numpy(), lowcut=0.6, highcut=4, fs=30)
         rppg_F_butter = butter_bandpass(rppg_F.detach().cpu().numpy(), lowcut=0.6, highcut=4, fs=30)
         rppg_r_butter = butter_bandpass(rppg_r.detach().cpu().numpy(), lowcut=0.6, highcut=4, fs=30)
@@ -297,17 +262,30 @@ for epoch in range(epoch_number,epoch_number+1):
         loss_norm_Rr = abs(hr_1-hr_3)/60
         loss_norm_Ff = abs(hr_2-hr_4)/60 
 
-        loss_hr = ( loss_norm_Rr + loss_norm_Ff) / 2
+        loss_hr = loss_norm_Rr + loss_norm_Ff
 
-        physiological_loss = loss_rPPG_pull + loss_rPPG_push +  loss_hr
+        physiological_loss = loss_rPPG_pull + loss_rPPG_push + loss_hr
         
-
+        # Cross-Modality Consistency Learning
         MSELoss = nn.MSELoss()
         loss_mse_between_Rr = MSELoss(cosine_similarity_feature_text_R, cosine_similarity_feature_text_r) 
         loss_mse_between_Ff = MSELoss(cosine_similarity_feature_text_F, cosine_similarity_feature_text_f) 
         
         loss_mse = loss_mse_between_Rr + loss_mse_between_Ff
+        
+        loss_cosine_similarity_R = 1 - cosine_similarity_feature_text_R
+        loss_cosine_similarity_F = 1 - cosine_similarity_feature_text_F
+        loss_cosine_similarity_r = 1 - cosine_similarity_feature_text_r
+        loss_cosine_similarity_f = 1 - cosine_similarity_feature_text_f
 
+        loss_cosine_similarity_other_R = cosine_similarity_feature_text_other_R
+        loss_cosine_similarity_other_F = cosine_similarity_feature_text_other_F
+        loss_cosine_similarity_other_r = cosine_similarity_feature_text_other_r
+        loss_cosine_similarity_other_f = cosine_similarity_feature_text_other_f
+
+        loss_text_pull = loss_cosine_similarity_R + loss_cosine_similarity_F+ loss_cosine_similarity_r + loss_cosine_similarity_f
+        loss_text_push = loss_cosine_similarity_other_R + loss_cosine_similarity_other_F + loss_cosine_similarity_other_r +loss_cosine_similarity_other_f
+        
         cross_modal_consistency_loss = loss_text_pull + loss_text_push + loss_mse
 
         
