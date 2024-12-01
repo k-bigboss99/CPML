@@ -72,9 +72,6 @@
 
     ```
 
-- Training and Inference
-    - Please refer to [train.md](/UgsYqvB_TSu4bi2JvmAQIg) for training the models.
-
 
 
 ## Results
