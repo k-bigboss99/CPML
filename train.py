@@ -41,7 +41,7 @@ from landmark_model import DualLRNet
 from rppg_model import ViT_ST_ST_Compact3_TDC_gra_sharp
 from model_rppg_landmark_text import PAD_Classifier
 
-def HR_F0_to_120(HR_rate):
+def HR_60_to_120(HR_rate):
     if HR_rate<60:
         HR_rate = 60
     elif HR_rate>=120:
@@ -172,17 +172,16 @@ torch.autograd.set_detect_anomaly(True)
 # loader
 
 train_loader_raw_real = get_loader(train=True, seq_length=160, batch_size=1, if_fg=True, shuffle=False,
-                         real_or_fake="real", real="youtube", fake=DF, comp=raw)
+                         real_or_fake="real", real="youtube", fake="DF", comp="raw")
 train_loader_raw_fake = get_loader(train=True, seq_length=160, batch_size=1, if_fg=True, shuffle=False,
-                         real_or_fake="fake", real="youtube", fake=DF, comp=raw)
-
+                         real_or_fake="fake", real="youtube", fake="DF", comp="raw")
 
 
 # text model
 model_text, _ = clip.load("ViT-B/16", 'cuda:0')
 
 # model
-model = load_net(device=device, rPPG_path="Physformer_VIPL_fold1.pkl", LRNet_comp=raw, model_text=model_text)
+model = load_net(device=device, rPPG_path="Physformer_VIPL_fold1.pkl", LRNet_comp="raw", model_text=model_text)
 
 # optim and  BCE_loss 
 opt_fg = optim.AdamW(model.parameters(), lr=0.00001)
@@ -193,7 +192,7 @@ dissimilar = torch.tensor([-1], dtype=torch.float).to(device)
 
 
 for epoch in range(epoch_number,epoch_number+1):
-    for step, (data_raw_r,data_raw_f) in enumerate(zip(_train_loader_raw_real, _train_loader_raw_fake)):
+    for step, (data_raw_r,data_raw_f) in enumerate(zip(train_loader_raw_real, train_loader_raw_fake)):
         
         # Multi-modal Prompt-guided Learning
         face_frames_r, landmarks_r, landmarks_diff_r, label_r, subjects_r = data_raw_r
@@ -215,22 +214,21 @@ for epoch in range(epoch_number,epoch_number+1):
         out_Fake, out_land_Fake, out_rPPG_Fake, rppg_Fake, cosine_similarity_feature_text_Fake, cosine_similarity_feature_text_other_Fake \
         ,out_rppg_cross_landmark_cat_prompt_Fake = model(face_frames_Fake, landmarks_Fake, landmarks_diff_Fake, dissimilar,size=128)
         
-        loss_BCE = BCE_loss(out_rppg_cross_landmark_cat_prompt_R ,label_r[:, 0].long())
-        loss_BCE = BCE_loss(out_rppg_cross_landmark_cat_prompt_F ,label_f[:, 0].long())
-        total_loss.backward()
+        loss_BCE = BCE_loss(out_rppg_cross_landmark_cat_prompt_Real ,label_r[:, 0].long()) + BCE_loss(out_rppg_cross_landmark_cat_prompt_Fake ,label_f[:, 0].long())
+        loss_BCE.backward()
         
         # Multi-modal Prompt-guided Contrastive Learning
         out_R, out_land_R, out_rPPG_R, rppg_R, cosine_similarity_feature_text_R, cosine_similarity_feature_text_other_R \
-        ,out_rppg_cross_landmark_cat_prompt_R   = model(face_frames_R, landmarks_R, landmarks_diff_R, similar,size=64)
+        ,out_rppg_cross_landmark_cat_prompt_R = model(face_frames_R, landmarks_R, landmarks_diff_R, similar,size=64)
        
         out_F, out_land_F, out_rPPG_F, rppg_F, cosine_similarity_feature_text_F, cosine_similarity_feature_text_other_F \
-        ,out_rppg_cross_landmark_cat_prompt_F    = model(face_frames_F, landmarks_F, landmarks_diff_F, dissimilar,size=64)
+        ,out_rppg_cross_landmark_cat_prompt_F = model(face_frames_F, landmarks_F, landmarks_diff_F, dissimilar,size=64)
 
         out_r, out_land_r, out_rPPG_r, rppg_r, cosine_similarity_feature_text_r, cosine_similarity_feature_text_other_r \
-        ,out_rppg_cross_landmark_cat_prompt_r   = model(face_frames_R, landmarks_R, landmarks_diff_R, similar,size=32)
+        ,out_rppg_cross_landmark_cat_prompt_r = model(face_frames_R, landmarks_R, landmarks_diff_R, similar,size=32)
        
         out_f, out_land_f, out_rPPG_f, rppg_f, cosine_similarity_feature_text_f, cosine_similarity_feature_text_other_f \
-        ,out_rppg_cross_landmark_cat_prompt_f    = model(face_frames_F, landmarks_F, landmarks_diff_F, dissimilar,size=32)
+        ,out_rppg_cross_landmark_cat_prompt_f = model(face_frames_F, landmarks_F, landmarks_diff_F, dissimilar,size=32)
 
         # Cross-Quality Similarity Learning
         PearsoLoss = Pearson()
@@ -254,13 +252,13 @@ for epoch in range(epoch_number,epoch_number+1):
         hr_r, psd_y_r, psd_x_r = hr_fft(rppg_r_butter, fs=30)
         hr_f, psd_y_f, psd_x_f = hr_fft(rppg_f_butter, fs=30)
 
-        hr_R = HR_F0_to_120(hr_R)
-        hr_F = HR_F0_to_120(hr_F)
-        hr_r = HR_F0_to_120(hr_r)
-        hr_f = HR_F0_to_120(hr_f)
+        hr_R = HR_60_to_120(hr_R)
+        hr_F = HR_60_to_120(hr_F)
+        hr_r = HR_60_to_120(hr_r)
+        hr_f = HR_60_to_120(hr_f)
 
-        loss_norm_Rr = abs(hr_1-hr_3)/60
-        loss_norm_Ff = abs(hr_2-hr_4)/60 
+        loss_norm_Rr = abs(hr_R-hr_r)/60
+        loss_norm_Ff = abs(hr_F-hr_f)/60 
 
         loss_hr = loss_norm_Rr + loss_norm_Ff
 
@@ -278,13 +276,13 @@ for epoch in range(epoch_number,epoch_number+1):
         loss_cosine_similarity_r = 1 - cosine_similarity_feature_text_r
         loss_cosine_similarity_f = 1 - cosine_similarity_feature_text_f
 
-        loss_cosine_similarity_other_R = cosine_similarity_feature_text_other_R
-        loss_cosine_similarity_other_F = cosine_similarity_feature_text_other_F
-        loss_cosine_similarity_other_r = cosine_similarity_feature_text_other_r
-        loss_cosine_similarity_other_f = cosine_similarity_feature_text_other_f
+        loss_cosine_dissimilarity_R = cosine_similarity_feature_text_other_R
+        loss_cosine_dissimilarity_F = cosine_similarity_feature_text_other_F
+        loss_cosine_dissimilarity_r = cosine_similarity_feature_text_other_r
+        loss_cosine_dissimilarity_f = cosine_similarity_feature_text_other_f
 
         loss_text_pull = loss_cosine_similarity_R + loss_cosine_similarity_F+ loss_cosine_similarity_r + loss_cosine_similarity_f
-        loss_text_push = loss_cosine_similarity_other_R + loss_cosine_similarity_other_F + loss_cosine_similarity_other_r +loss_cosine_similarity_other_f
+        loss_text_push = loss_cosine_dissimilarity_R + loss_cosine_dissimilarity_F + loss_cosine_dissimilarity_r +loss_cosine_dissimilarity_f
         
         cross_modal_consistency_loss = loss_text_pull + loss_text_push + loss_mse
 
