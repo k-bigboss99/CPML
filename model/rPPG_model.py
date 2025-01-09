@@ -172,6 +172,10 @@ class ViT_ST_ST_Compact3_TDC_gra_sharp(nn.Module):
         else:
             pass 
 
+        # pfe
+        x = self.pfe_heart_x(x,128) 
+        x = x.permute(0,2,1,3,4).contiguous()
+        
         b, c, t, fh, fw = x.shape
         
         x = self.Stem0(x)
@@ -203,6 +207,32 @@ class ViT_ST_ST_Compact3_TDC_gra_sharp(nn.Module):
         rPPG = rPPG.squeeze(1)
         
         return rPPG, Score1, Score2, Score3
+
+    
+    def pfe_heart_x(self,x,output_size):
+        [batch, channel, length, width, height] = x.shape
+        imnet = self.mlp_x
+        # coord = utils.make_coord([64,64]).cuda(device=self.device_ids)
+        # coord = make_coord([64,64])
+
+        # TODO 128 cuda 
+        # coord = make_coord([128,128])
+        coord = make_coord([128,128]).cuda(device="cuda:0")  
+
+        cell = torch.ones_like(coord)
+        coord = coord.expand(batch*length,-1,-1)
+        cell[:, 0] *= 2 / output_size
+        cell[:, 1] *= 2 / output_size
+        cell = cell.expand(batch*length,-1,-1)
+        x = x.permute(0,2,1,3,4).contiguous().view(-1,channel,width,height)
+        ret = self.query_rgb(x, coord,cell=cell,imnet=imnet)
+        
+        # print("pfe_heart_x ret before = ",ret.shape) # [320, 4096, 16] -> [300, 16384, 16]
+        ret = ret.permute(0,2,1).contiguous().view(batch*length,channel,output_size,output_size).view(batch,length,channel,output_size,output_size)
+        # print("pfe_heart_x ret = ",ret.shape)# [2, 160, 16, 64, 64]
+
+        return ret
+
 
 
 
